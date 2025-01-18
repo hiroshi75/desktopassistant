@@ -3,30 +3,31 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import http.server
 import threading
-import sys
+import socketserver
 import os
 
-# メインアプリケーションのパスを追加
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.main import DesktopAssistant
-
-class TestChatApp(unittest.TestCase):
+class TestChatUI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # アプリケーションを別スレッドで起動
-        cls.app = DesktopAssistant()
-        cls.app_thread = threading.Thread(target=cls.app.run)
-        cls.app_thread.daemon = True
-        cls.app_thread.start()
+        # HTTPサーバーの設定
+        cls.template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'templates')
         
-        # チャットウィンドウを開く
-        cls.app.event_queue.put("open_chat")
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=cls.template_dir, **kwargs)
+        
+        cls.httpd = socketserver.TCPServer(("", 8000), Handler)
+        cls.server_thread = threading.Thread(target=cls.httpd.serve_forever)
+        cls.server_thread.daemon = True
+        cls.server_thread.start()
 
     def setUp(self):
         # Seleniumドライバーの設定
         self.driver = webdriver.Chrome()
         self.wait = WebDriverWait(self.driver, 10)
+        self.driver.get("http://localhost:8000/chat.html")
 
     def test_send_message(self):
         """メッセージ送信機能のテスト"""
@@ -57,8 +58,8 @@ class TestChatApp(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # アプリケーションの終了
-        cls.app.event_queue.put("quit")
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
 
 if __name__ == '__main__':
     unittest.main()
