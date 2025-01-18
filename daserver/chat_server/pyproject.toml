@@ -12,6 +12,8 @@ psycopg = {extras = ["binary"], version = "^3.2.4"}
 langchain-aws = "^0.2.11"
 uvicorn = "^0.34.0"
 python-dotenv = "^1.0.1"
+pytest = "^7.4.4"
+httpx = "^0.26.0"
 
 
 [build-system]

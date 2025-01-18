@@ -38,6 +38,10 @@ async def healthz():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
+        # 空のメッセージの場合は特別な応答を返す
+        if not request.message.strip():
+            return ChatResponse(response="申し訳ありません。メッセージを入力してください。")
+
         messages = [
             (
                 "system",
