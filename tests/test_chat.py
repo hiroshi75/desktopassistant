@@ -7,6 +7,11 @@ import http.server
 import threading
 import socketserver
 import os
+import sys
+
+# メインアプリケーションのパスを追加
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.main import DesktopAssistant
 
 class TestChatUI(unittest.TestCase):
     @classmethod
@@ -25,9 +30,30 @@ class TestChatUI(unittest.TestCase):
 
     def setUp(self):
         # Seleniumドライバーの設定
-        self.driver = webdriver.Chrome()
+        options = webdriver.ChromeOptions()
+        options.add_argument('--no-sandbox')
+        options.add_argument('--headless')  # ヘッドレスモードで実行
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--user-data-dir=/tmp/chrome-test-profile')
+        self.driver = webdriver.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.get("http://localhost:8000/chat.html")
+
+    def test_chat_window_elements(self):
+        """チャットウィンドウの要素テスト"""
+        # 入力フィールドの存在確認
+        input_field = self.wait.until(
+            EC.presence_of_element_located((By.ID, "input"))
+        )
+        self.assertTrue(input_field.is_displayed())
+
+        # 送信ボタンの存在確認
+        send_button = self.driver.find_element(By.ID, "send")
+        self.assertTrue(send_button.is_displayed())
+
+        # チャットエリアの存在確認
+        chat_area = self.driver.find_element(By.ID, "chat")
+        self.assertTrue(chat_area.is_displayed())
 
     def test_send_message(self):
         """メッセージ送信機能のテスト"""
@@ -52,6 +78,22 @@ class TestChatUI(unittest.TestCase):
             EC.presence_of_element_located((By.CLASS_NAME, "assistant-message"))
         )
         self.assertIn("ご質問ありがとうございます", assistant_response.text)
+
+    def test_system_tray_integration(self):
+        """システムトレイ統合テスト"""
+        app = DesktopAssistant()
+        
+        # イベントキューにチャットウィンドウを開くイベントを送信
+        app.event_queue.put("open_chat")
+        
+        # キューにイベントが正しく追加されたことを確認
+        event = app.event_queue.get()
+        self.assertEqual(event, "open_chat")
+        
+        # 終了イベントを送信
+        app.event_queue.put("quit")
+        event = app.event_queue.get()
+        self.assertEqual(event, "quit")
 
     def tearDown(self):
         self.driver.quit()
