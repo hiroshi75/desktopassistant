@@ -84,7 +84,7 @@ class DesktopAssistant:
         print("終了するには Ctrl+C を押してください")
 
         # 音声認識ハンドラーの初期化（シミュレーションモード）
-        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vosk-model-small-ja-0.22")
+        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vosk-model-small-ja-0.22/vosk-model-small-ja-0.22")
         print(f"モデルパス: {model_path}")
         voice_handler = VoiceHandler(model_path, self.event_queue, simulation_mode=True)
         voice_thread = voice_handler.start_background()
@@ -127,10 +127,6 @@ class DesktopAssistant:
             self.manage_webview()
 
 if __name__ == "__main__":
-    import os
-    # テストモードで実行
-    os.environ["TEST_MODE"] = "true"
-    
     app = DesktopAssistant()
     try:
         app.run()
