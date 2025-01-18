@@ -12,13 +12,16 @@ class TestChatUI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # HTTPサーバーの設定
-        cls.template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'templates')
+        cls.template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'desktopassistant', 'templates')
         
         class Handler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, directory=cls.template_dir, **kwargs)
         
-        cls.httpd = socketserver.TCPServer(("", 8000), Handler)
+        class ReuseAddressTCPServer(socketserver.TCPServer):
+            allow_reuse_address = True
+            
+        cls.httpd = ReuseAddressTCPServer(("", 8000), Handler)
         cls.server_thread = threading.Thread(target=cls.httpd.serve_forever)
         cls.server_thread.daemon = True
         cls.server_thread.start()

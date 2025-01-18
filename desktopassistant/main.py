@@ -1,10 +1,14 @@
 import webview
 import threading
-from pystray import Icon, Menu, MenuItem
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
-from src.voice_handler import VoiceHandler
+from desktopassistant.voice_handler import VoiceHandler
+
+# Lazy import of pystray to improve testability
+def get_pystray():
+    from pystray import Icon, Menu, MenuItem
+    return Icon, Menu, MenuItem
 
 # HTMLテンプレートの読み込み
 def get_html_template():
@@ -34,6 +38,8 @@ class DesktopAssistant:
 
     def setup_tray_icon(self):
         """システムトレイアイコンのセットアップ"""
+        Icon, Menu, MenuItem = get_pystray()
+        
         def on_open(icon, item):
             self.event_queue.put("open_chat")
 
