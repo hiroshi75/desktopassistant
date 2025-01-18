@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>デスクトップアシスタント</title>
     <style>
+        :root {
+            --recording-color: #ff4444;
+        }
         body {
             font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
             margin: 0;
@@ -46,6 +49,33 @@
         #send:hover {
             background: #0056b3;
         }
+        #voice-input {
+            margin-left: 10px;
+            padding: 10px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+        #voice-input.recording {
+            background: var(--recording-color);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        #voice-input:hover {
+            opacity: 0.9;
+        }
         .message {
             margin: 5px 0;
             padding: 8px;
@@ -67,11 +97,102 @@
     <div id="input-container">
         <input id="input" type="text" placeholder="メッセージを入力..." />
         <button id="send">送信</button>
+        <button id="voice-input" title="音声入力">🎤</button>
     </div>
     <script>
         const chat = document.getElementById('chat');
         const input = document.getElementById('input');
         const send = document.getElementById('send');
+        const voiceInput = document.getElementById('voice-input');
+        
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let ws;
+
+        // WebSocketの初期化
+        function initWebSocket() {
+            const wsUrl = (window.CHAT_API_URL || "ws://127.0.0.1:8000").replace(/^http/, 'ws');
+            ws = new WebSocket(`${wsUrl}/TranscribeStreaming`);
+            
+            ws.onmessage = function(event) {
+                const message = event.data;
+                if (message.startsWith('認識テキスト:')) {
+                    addMessage('You', message.substring('認識テキスト:'.length).trim(), true);
+                } else if (message.startsWith('応答:')) {
+                    addMessage('Assistant', message.substring('応答:'.length).trim());
+                } else {
+                    console.log('受信メッセージ:', message);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket エラー:', error);
+                addMessage('System', 'WebSocket接続エラーが発生しました。', false);
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket接続が閉じられました');
+                ws = null;
+            };
+        }
+
+        // 音声録音の開始
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = async (event) => {
+                    if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                        // 音声データをWebSocketで送信
+                        const arrayBuffer = await event.data.arrayBuffer();
+                        ws.send(arrayBuffer);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                // 100msごとにデータを送信
+                mediaRecorder.start(100);
+                isRecording = true;
+                voiceInput.classList.add('recording');
+                
+                // WebSocket接続を初期化
+                if (!ws) {
+                    initWebSocket();
+                }
+            } catch (err) {
+                console.error('音声録音エラー:', err);
+                addMessage('System', `音声録音エラー: ${err.message}`, false);
+            }
+        }
+
+        // 音声録音の停止
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceInput.classList.remove('recording');
+                
+                // WebSocket接続を閉じる
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                }
+            }
+        }
+
+        // 音声入力ボタンのイベントハンドラ
+        voiceInput.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
 
         function addMessage(sender, message, isUser = false) {
             const div = document.createElement('div');
