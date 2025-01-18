@@ -15,6 +15,9 @@ python-dotenv = "^1.0.1"
 pytest = "^7.4.4"
 httpx = "^0.26.0"
 markdown = "^3.7"
+amazon-transcribe = "^0.6.2"
+python-multipart = ">=0.0.5"
+websockets = "^14.1"
 
 
 [build-system]
