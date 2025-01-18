@@ -18,6 +18,8 @@ markdown = "^3.7"
 amazon-transcribe = "^0.6.2"
 python-multipart = ">=0.0.5"
 websockets = "^14.1"
+pytest-asyncio = "0.21.1"
+numpy = "^2.2.1"
 
 
 [build-system]
