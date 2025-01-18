@@ -4,6 +4,7 @@ from pydantic import BaseModel, SecretStr
 import os
 from langchain_aws import ChatBedrock
 from typing import List, Tuple
+from markdown import markdown
 
 app = FastAPI()
 
@@ -18,10 +19,9 @@ app.add_middleware(
 
 # Initialize Bedrock client
 llm = ChatBedrock(
-    aws_access_key_id=SecretStr(os.environ["AWS_ACCESS_KEY_ID"]),
-    aws_secret_access_key=SecretStr(os.environ["AWS_SECRET_ACCESS_KEY"]),
-    model="us.amazon.nova-lite-v1:0",
-    region="us-east-1",
+    credentials_profile_name=None,
+    region_name="us-east-1",
+    model_id="anthropic.claude-3-sonnet-20240229-v1:0",
     model_kwargs={"temperature": 0.7},
 )
 
@@ -52,6 +52,8 @@ async def chat(request: ChatRequest):
         
         ai_msg = llm.invoke(messages)
         response_text = str(ai_msg.content) if hasattr(ai_msg, 'content') else str(ai_msg)
-        return ChatResponse(response=response_text)
+        # Convert markdown response to HTML
+        html_response = markdown(response_text, extensions=['extra'])
+        return ChatResponse(response=html_response)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
