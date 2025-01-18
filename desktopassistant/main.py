@@ -3,6 +3,7 @@ import threading
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
+import platform
 from desktopassistant.voice_handler import VoiceHandler
 
 # Lazy import of pystray to improve testability
@@ -68,6 +69,18 @@ class DesktopAssistant:
                     )
                     webview.start()
                     self.window = None
+                else:
+                    # Windowsの場合のみウィンドウを前面に表示
+                    if platform.system() == 'Windows':
+                        try:
+                            import win32gui
+                            import win32con
+                            hwnd = win32gui.FindWindow(None, 'デスクトップアシスタント')
+                            if hwnd:
+                                win32gui.SetForegroundWindow(hwnd)
+                                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                        except ImportError:
+                            print("pywin32がインストールされていません。最前面表示はスキップします。")
             elif event == "quit":
                 break
 
