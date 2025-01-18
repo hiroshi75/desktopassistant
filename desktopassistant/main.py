@@ -76,7 +76,7 @@ class DesktopAssistant:
 
     def run_test_mode(self):
         """テストモードでの実行"""
-        from .voice_handler import VoiceHandler
+        from desktopassistant.voice_handler import VoiceHandler
         print("デスクトップアシスタント - テストモード")
         print("音声認識を開始します...")
         print("'パスタ'と言うと音声ストリーミングが開始されます")
