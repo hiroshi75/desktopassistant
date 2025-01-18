@@ -136,8 +136,16 @@ class VoiceHandler:
                 self.event_queue.put(("status", "サーバーからの応答を待機中"))
                 async for message in ws:
                     if isinstance(message, str):
-                        # テキストメッセージをイベントキューに追加
-                        self.event_queue.put(("server_response", message))
+                        # メッセージの種類に基づいて処理
+                        if message.startswith("認識テキスト:"):
+                            self.event_queue.put(("transcription", message[7:].strip()))
+                        elif message.startswith("応答:"):
+                            self.event_queue.put(("response", message[3:].strip()))
+                        elif message.startswith("最終認識テキスト:"):
+                            self.event_queue.put(("final_transcription", message[10:].strip()))
+                        else:
+                            # その他のメッセージ（エラーなど）
+                            self.event_queue.put(("server_message", message))
 
         except Exception as e:
             error_msg = f"音声ストリーミングエラー: {e}"
