@@ -3,7 +3,6 @@ import threading
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
-from desktopassistant.voice_handler import VoiceHandler
 
 # Lazy import of pystray to improve testability
 def get_pystray():
@@ -24,10 +23,6 @@ class DesktopAssistant:
         self.window = None
         self.event_queue = Queue()
         self.stop_event = threading.Event()
-        self.voice_handler = VoiceHandler(
-            model_path="vosk-model-small-ja-0.22/vosk-model-small-ja-0.22",
-            event_queue=self.event_queue
-        )
 
     def create_icon(self):
         """システムトレイアイコンの作成"""
@@ -82,15 +77,8 @@ class DesktopAssistant:
         )
         tray_thread.start()
 
-        # 音声認識のスレッド開始
-        voice_thread = self.voice_handler.start_background()
-
         # WebViewの管理（メインループ）
         self.manage_webview()
-
-        # 終了時のクリーンアップ
-        self.voice_handler.stop()
-        voice_thread.join(timeout=1.0)  # 最大1秒待機
 
 if __name__ == "__main__":
     app = DesktopAssistant()
