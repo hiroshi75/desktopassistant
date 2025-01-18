@@ -87,10 +87,32 @@
                 addMessage('You', message, true);
                 input.value = '';
 
-                // アシスタントの応答をシミュレート
-                setTimeout(() => {
-                    addMessage('Assistant', 'ご質問ありがとうございます。どのようにお手伝いできますか？');
-                }, 500);
+                // FastAPIサーバーにメッセージを送信
+                console.log('送信メッセージ:', message);
+                fetch((window.CHAT_API_URL || "http://127.0.0.1:8000") + "/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message }),
+                })
+                .then(res => {
+                    console.log('レスポンスステータス:', res.status);
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    console.log('受信レスポンス:', data);
+                    if(data && data.response) {
+                        addMessage('Assistant', data.response);
+                    } else {
+                        throw new Error('Invalid response format');
+                    }
+                })
+                .catch(err => {
+                    console.error('エラー詳細:', err);
+                    addMessage('Assistant', `エラーが発生しました: ${err.message}`);
+                });
             }
         }
 
