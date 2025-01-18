@@ -1,0 +1,27 @@
+[tool.ruff]
+line-length = 88  # Match black's default line length
+target-version = "py312"  # We're using Python 3.12
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "N",  # pep8-naming
+    "W",  # pycodestyle warnings
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
