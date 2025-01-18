@@ -64,7 +64,8 @@ class DesktopAssistant:
                         'デスクトップアシスタント',
                         html=HTML_TEMPLATE,
                         width=400,
-                        height=600
+                        height=600,
+                        on_top=True
                     )
                     webview.start()
                     self.window = None
