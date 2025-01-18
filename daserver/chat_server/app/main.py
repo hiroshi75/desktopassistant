@@ -189,7 +189,7 @@ async def transcribe_streaming(websocket: WebSocket):
         # ストリーミングセッションの開始（基本パラメータと安定性設定）
         stream = await client.start_stream_transcription(
             language_code="ja-JP",
-            media_sample_rate_hz=8000,
+            media_sample_rate_hz=16000,
             media_encoding="pcm",
             vocabulary_name=None,  # カスタム語彙は使用しない
             session_id="test-session",  # セッションIDを指定
