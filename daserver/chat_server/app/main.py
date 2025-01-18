@@ -4,6 +4,7 @@ from pydantic import BaseModel, SecretStr
 import os
 import asyncio
 import logging
+import time
 
 # ログレベルの設定
 logging.basicConfig(level=logging.INFO,
@@ -82,9 +83,12 @@ class TranscribeHandler(TranscriptResultStreamHandler):
         """イベントの処理を開始"""
         logging.info("handle_eventsを開始します")
         try:
+            logging.info("Amazon Transcribeからの応答待機中...")
             await super().handle_events()
+            logging.info("Amazon Transcribeからの応答受信完了")
         except Exception as e:
             logging.error(f"handle_eventsでエラーが発生: {e}")
+            logging.error(f"エラーの詳細: {str(e.__class__.__name__)}: {str(e)}")
             self.websocket_open = False
         finally:
             logging.info("handle_eventsが終了しました")
@@ -170,6 +174,9 @@ async def transcribe_streaming(websocket: WebSocket):
     stop_audio_stream = False
     audio_queue = asyncio.Queue()
     
+    # タイムアウトを設定（60秒）
+    websocket.client.timeout = 60.0
+    
     try:
         # Amazon Transcribeクライアントの初期化
         logging.info("Amazon Transcribeクライアントを初期化中...")
@@ -186,17 +193,16 @@ async def transcribe_streaming(websocket: WebSocket):
         logging.debug(f"- エンコーディング: pcm")
         logging.debug(f"- リージョン: {os.getenv('AWS_REGION', 'us-east-1')}")
         
-        # ストリーミングセッションの開始（基本パラメータと安定性設定）
+        # ストリーミングセッションの開始（タイムアウトと安定性の設定を追加）
         stream = await client.start_stream_transcription(
             language_code="ja-JP",
             media_sample_rate_hz=16000,
             media_encoding="pcm",
-            vocabulary_name=None,  # カスタム語彙は使用しない
-            session_id="test-session",  # セッションIDを指定
-            vocabulary_filter_method=None,  # 語彙フィルターは使用しない
+            session_id=f"session-{int(time.time())}",  # セッションIDを追加
             enable_partial_results_stabilization=True,  # 部分的な結果の安定化を有効化
             partial_results_stability="high",  # 高い安定性を設定
-            show_speaker_label=False  # スピーカーラベルは不要
+            show_speaker_label=False,  # スピーカーラベルは不要
+            max_real_time_factor=3  # リアルタイムの3倍まで許容（タイムアウト対策）
         )
         # AWS認証情報の確認
         logging.debug("AWS認証情報の確認:")
@@ -297,8 +303,24 @@ async def transcribe_streaming(websocket: WebSocket):
                         if text_message == "submit_response":
                             logging.info("音声入力の終了シグナルを受信")
                             stop_audio_stream = True
-                            await send_task
-                            break
+                            try:
+                                # 残りの音声データを処理
+                                await asyncio.wait_for(send_task, timeout=5.0)
+                                # ストリームを明示的に終了
+                                await stream.input_stream.end_stream()
+                                logging.info("音声ストリームを終了しました")
+                                # 最終的な認識結果を待機
+                                await handler.send_final_transcript()
+                                # 正常な終了を通知
+                                await websocket.send_text("処理完了")
+                            except asyncio.TimeoutError:
+                                logging.error("音声データの処理がタイムアウトしました")
+                                await websocket.send_text("エラー: 処理がタイムアウトしました")
+                            except Exception as e:
+                                logging.error(f"音声データの処理中にエラーが発生: {e}")
+                                await websocket.send_text(f"エラー: {str(e)}")
+                            finally:
+                                break
 
             except WebSocketDisconnect:
                 logging.info("WebSocket disconnected")
