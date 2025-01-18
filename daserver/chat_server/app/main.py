@@ -65,11 +65,40 @@ async def chat(request: ChatRequest):
 
 class TranscribeHandler(TranscriptResultStreamHandler):
     """Amazon Transcribeの結果を処理するハンドラー"""
-    def __init__(self, output_stream, websocket: WebSocket):
+    def __init__(self, output_stream, websocket: WebSocket, llm: ChatBedrock):
         super().__init__(output_stream)
         self.websocket = websocket
         self.final_transcript = ""
         self.websocket_open = True
+        self.llm = llm
+        self.processing_llm = False
+
+    async def process_with_llm(self, text: str):
+        """テキストをLLMで処理し、応答を返す"""
+        if self.processing_llm:
+            return
+        
+        try:
+            self.processing_llm = True
+            messages = [
+                (
+                    "system",
+                    "あなたは親切なアシスタントです。ユーザーの音声入力に対して日本語で簡潔に答えてください。",
+                ),
+                ("human", text),
+            ]
+            
+            ai_msg = self.llm.invoke(messages)
+            response_text = str(ai_msg.content) if hasattr(ai_msg, 'content') else str(ai_msg)
+            # マークダウンをHTMLに変換
+            html_response = markdown(response_text, extensions=['extra'])
+            
+            await self.websocket.send_text(f"応答: {html_response}")
+        except Exception as e:
+            logging.error(f"Error processing LLM response: {e}")
+            await self.websocket.send_text(f"LLM処理エラー: {str(e)}")
+        finally:
+            self.processing_llm = False
 
     async def handle_transcript_event(self, transcript_event: TranscriptEvent):
         """音声認識結果を処理し、WebSocketを通じてクライアントに送信"""
@@ -84,9 +113,11 @@ class TranscribeHandler(TranscriptResultStreamHandler):
                 transcript = alt.transcript
                 self.final_transcript += transcript + " "
                 try:
-                    await self.websocket.send_text(transcript)
+                    await self.websocket.send_text(f"認識テキスト: {transcript}")
+                    # 完了した発話に対してLLM処理を実行
+                    await self.process_with_llm(transcript)
                 except Exception as e:
-                    logging.error(f"Error sending transcript: {e}")
+                    logging.error(f"Error in transcript handling: {e}")
                     self.websocket_open = False
                     break
 
@@ -112,7 +143,7 @@ async def transcribe_streaming(websocket: WebSocket):
         )
 
         # ハンドラーの初期化と非同期タスクの作成
-        handler = TranscribeHandler(stream.output_stream, websocket)
+        handler = TranscribeHandler(stream.output_stream, websocket, llm)
         handle_events_task = asyncio.create_task(handler.handle_events())
 
         async def process_audio():
