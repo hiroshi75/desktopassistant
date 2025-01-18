@@ -67,7 +67,7 @@ class DesktopAssistant:
                         height=600,
                         on_top=True
                     )
-                    webview.start()
+                    webview.start(gui='qt')
                     self.window = None
             elif event == "quit":
                 break
