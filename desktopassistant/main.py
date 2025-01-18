@@ -55,6 +55,19 @@ class DesktopAssistant:
         icon = Icon("DesktopAssistant", self.create_icon(), "デスクトップアシスタント", menu)
         icon.run()
 
+    def bring_window_to_front(self):
+        """ウィンドウを最前面に表示（Windows環境のみ）"""
+        if platform.system() == 'Windows':
+            try:
+                import win32gui
+                import win32con
+                hwnd = win32gui.FindWindow(None, 'デスクトップアシスタント')
+                if hwnd:
+                    win32gui.SetForegroundWindow(hwnd)
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+            except ImportError:
+                print("pywin32がインストールされていません。最前面表示はスキップします。")
+
     def manage_webview(self):
         """WebViewの管理"""
         while True:
@@ -68,19 +81,12 @@ class DesktopAssistant:
                         height=600
                     )
                     webview.start()
+                    # ウィンドウ作成後に最前面表示
+                    self.bring_window_to_front()
                     self.window = None
                 else:
-                    # Windowsの場合のみウィンドウを前面に表示
-                    if platform.system() == 'Windows':
-                        try:
-                            import win32gui
-                            import win32con
-                            hwnd = win32gui.FindWindow(None, 'デスクトップアシスタント')
-                            if hwnd:
-                                win32gui.SetForegroundWindow(hwnd)
-                                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-                        except ImportError:
-                            print("pywin32がインストールされていません。最前面表示はスキップします。")
+                    # 既存のウィンドウを最前面に表示
+                    self.bring_window_to_front()
             elif event == "quit":
                 break
 
