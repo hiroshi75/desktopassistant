@@ -3,7 +3,6 @@ import threading
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
-import platform
 from desktopassistant.voice_handler import VoiceHandler
 
 # Lazy import of pystray to improve testability
@@ -55,19 +54,6 @@ class DesktopAssistant:
         icon = Icon("DesktopAssistant", self.create_icon(), "デスクトップアシスタント", menu)
         icon.run()
 
-    def bring_window_to_front(self):
-        """ウィンドウを最前面に表示（Windows環境のみ）"""
-        if platform.system() == 'Windows':
-            try:
-                import win32gui
-                import win32con
-                hwnd = win32gui.FindWindow(None, 'デスクトップアシスタント')
-                if hwnd:
-                    win32gui.SetForegroundWindow(hwnd)
-                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-            except ImportError:
-                print("pywin32がインストールされていません。最前面表示はスキップします。")
-
     def manage_webview(self):
         """WebViewの管理"""
         while True:
@@ -78,15 +64,11 @@ class DesktopAssistant:
                         'デスクトップアシスタント',
                         html=HTML_TEMPLATE,
                         width=400,
-                        height=600
+                        height=600,
+                        on_top=True
                     )
                     webview.start()
-                    # ウィンドウ作成後に最前面表示
-                    self.bring_window_to_front()
                     self.window = None
-                else:
-                    # 既存のウィンドウを最前面に表示
-                    self.bring_window_to_front()
             elif event == "quit":
                 break
 
