@@ -4,6 +4,7 @@ from pystray import Icon, Menu, MenuItem
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
+from src.voice_handler import VoiceHandler
 
 # HTMLテンプレートの読み込み
 def get_html_template():
@@ -18,6 +19,11 @@ class DesktopAssistant:
     def __init__(self):
         self.window = None
         self.event_queue = Queue()
+        self.stop_event = threading.Event()
+        self.voice_handler = VoiceHandler(
+            model_path="vosk-model-small-ja-0.22/vosk-model-small-ja-0.22",
+            event_queue=self.event_queue
+        )
 
     def create_icon(self):
         """システムトレイアイコンの作成"""
@@ -61,13 +67,23 @@ class DesktopAssistant:
 
     def run(self):
         """アプリケーションの実行"""
+        # システムトレイアイコンのスレッド開始
         tray_thread = threading.Thread(
             target=self.setup_tray_icon,
             args=(),
             daemon=True
         )
         tray_thread.start()
+
+        # 音声認識のスレッド開始
+        voice_thread = self.voice_handler.start_background()
+
+        # WebViewの管理（メインループ）
         self.manage_webview()
+
+        # 終了時のクリーンアップ
+        self.voice_handler.stop()
+        voice_thread.join(timeout=1.0)  # 最大1秒待機
 
 if __name__ == "__main__":
     app = DesktopAssistant()

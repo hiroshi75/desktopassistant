@@ -12,6 +12,7 @@ pillow==11.1.0
 playwright==1.41.1
 pluggy==1.5.0
 proxy_tools==0.1.0
+pyaudio==0.2.14
 pyee==11.0.1
 PySocks==1.7.1
 pystray==0.19.5
@@ -28,6 +29,7 @@ trio==0.28.0
 trio-websocket==0.11.1
 typing_extensions==4.12.2
 urllib3==2.3.0
+vosk==0.3.45
 webdriver-manager==4.0.2
 websocket-client==1.8.0
 wsproto==1.2.0
