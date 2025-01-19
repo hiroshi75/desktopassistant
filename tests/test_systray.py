@@ -10,13 +10,45 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 # モジュールレベルでモックを作成
 mock_webview = MagicMock()
 mock_app_helper = MagicMock()
+mock_rumps = MagicMock()
+mock_main = MagicMock()
+
+# HTMLテンプレートのモック
+mock_html_template = """
+<!DOCTYPE html>
+<html><body><h1>Test Template</h1></body></html>
+"""
+mock_main.HTML_TEMPLATE = mock_html_template
 
 # モジュールをモック化
 sys.modules['pywebview'] = mock_webview
+sys.modules['rumps'] = mock_rumps
+sys.modules['desktopassistant.main'] = mock_main
+
+# PyObjCToolsのモック化
+class MockAppHelper:
+    @staticmethod
+    def callAfter(func, *args, **kwargs):
+        func(*args, **kwargs)
+
+mock_app_helper.callAfter = MockAppHelper.callAfter
 sys.modules['PyObjCTools.AppHelper'] = mock_app_helper
 
-# プラットフォーム判定
-IS_MACOS = sys.platform == 'darwin'
+# rumpsの基本的な機能をモック化
+class MockMenuItem:
+    def __init__(self, title, callback=None):
+        self.title = title
+        self._callback = callback
+        
+    def __str__(self):
+        return self.title
+
+mock_rumps.MenuItem = MockMenuItem
+mock_rumps.App = MagicMock
+
+# プラットフォーム判定を強制的にmacOSに設定
+sys.platform = 'darwin'
+IS_MACOS = True
 
 class TestSystemTray(unittest.TestCase):
     def test_macos_window_operations(self):
@@ -30,16 +62,28 @@ class TestSystemTray(unittest.TestCase):
         app = MacOSMenuBarApp()
         
         # チャットを開く操作のテスト
-        app.open_chat(None)
+        with patch('threading.current_thread', return_value=threading.main_thread()):
+            app.open_chat(None)
         
         # ウィンドウが作成され、表示されることを確認
-        mock_webview.create_window.assert_called_once()
-        mock_app_helper.callAfter.assert_called_with(mock_window.show)
+        mock_webview.create_window.assert_called_once_with(
+            title="デスクトップアシスタント",
+            html=mock_html_template,
+            width=400,
+            height=600,
+            resizable=True,
+            frameless=True,
+            easy_drag=True,
+            background_color="#00000000",
+            transparent=True,
+            on_top=True
+        )
+        self.assertTrue(mock_window.show.called)
         self.assertIsNotNone(app._window)
         
         # 終了操作のテスト
         app.quit_app(None)
-        mock_app_helper.callAfter.assert_called_with(mock_window.hide)
+        self.assertTrue(mock_window.hide.called)
         self.assertIsNone(app._window)
     
     def test_window_thread_safety(self):
