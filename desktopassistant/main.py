@@ -174,38 +174,141 @@ class DesktopAssistant:
     def init_macos_menu(self):
         """macOS用のメニューを初期化"""
         print("Initializing macOS menu...")
-        try:
-            import AppKit
-            from PyObjCTools import AppHelper
+        
+        def import_macos_dependencies():
+            """macOS依存ライブラリのインポート"""
+            try:
+                import AppKit
+                from PyObjCTools import AppHelper
+                return True, AppKit, AppHelper
+            except ImportError as e:
+                error_msg = (
+                    f"Error importing macOS dependencies: {e}\n"
+                    "This error typically occurs when PyObjC is not installed "
+                    "or when running on a non-macOS platform."
+                )
+                print(error_msg)
+                traceback.print_exc()
+                return False, None, None
+            except Exception as e:
+                error_msg = (
+                    f"Unexpected error importing macOS dependencies: {e}\n"
+                    "This might indicate a deeper system configuration issue."
+                )
+                print(error_msg)
+                traceback.print_exc()
+                return False, None, None
 
-            def setup_menu():
-                # メインメニューの作成
-                mainMenu = AppKit.NSMenu.alloc().init()
-                mainMenu.setTitle_("デスクトップアシスタント")  # タイトルを先に設定
-                AppKit.NSApplication.sharedApplication().setMainMenu_(mainMenu)
-
-                # アプリケーションメニューの作成
-                mainAppMenuItem = AppKit.NSMenuItem.alloc().init()
-                mainMenu.insertItem_atIndex_(mainAppMenuItem, 0)
-                appMenu = AppKit.NSMenu.alloc().init()
-                appMenu.setTitle_("アプリケーション")
-                mainAppMenuItem.setSubmenu_(appMenu)
-
+        def create_menu_items(AppKit, menu):
+            """メニュー項目の作成"""
+            try:
                 # メニュー項目の追加
-                appMenu.addItemWithTitle_action_keyEquivalent_(
+                menu.addItemWithTitle_action_keyEquivalent_(
                     "終了", "terminate:", "q"
                 )
+                return True
+            except Exception as e:
+                print(f"Error creating menu items: {e}")
+                traceback.print_exc()
+                return False
+
+        def setup_menu(AppKit):
+            """メインメニューのセットアップ"""
+            try:
+                # メインメニューの作成
+                mainMenu = AppKit.NSMenu.alloc().init()
+                if not mainMenu:
+                    raise RuntimeError("Failed to create NSMenu instance")
+                
+                mainMenu.setTitle_("デスクトップアシスタント")
+                
+                # メインメニューの設定
+                app = AppKit.NSApplication.sharedApplication()
+                if not app:
+                    raise RuntimeError("Failed to get shared application instance")
+                
+                app.setMainMenu_(mainMenu)
+                
+                # アプリケーションメニューの作成
+                mainAppMenuItem = AppKit.NSMenuItem.alloc().init()
+                if not mainAppMenuItem:
+                    raise RuntimeError("Failed to create main menu item")
+                
+                mainMenu.insertItem_atIndex_(mainAppMenuItem, 0)
+                
+                appMenu = AppKit.NSMenu.alloc().init()
+                if not appMenu:
+                    raise RuntimeError("Failed to create application menu")
+                
+                appMenu.setTitle_("アプリケーション")
+                mainAppMenuItem.setSubmenu_(appMenu)
+                
+                # メニュー項目の追加
+                if not create_menu_items(AppKit, appMenu):
+                    raise RuntimeError("Failed to create menu items")
+                
+                return True
+                
+            except Exception as e:
+                print(f"Error setting up menu: {e}")
+                traceback.print_exc()
+                return False
+
+        try:
+            # macOS依存ライブラリのインポート
+            success, AppKit, AppHelper = import_macos_dependencies()
+            if not success:
+                print("Failed to initialize macOS menu due to import errors")
+                return False
 
             # メインスレッドでメニューをセットアップ
+            def init_on_main():
+                try:
+                    if setup_menu(AppKit):
+                        print("macOS menu initialized successfully")
+                        return True
+                    else:
+                        print("Failed to setup macOS menu")
+                        return False
+                except Exception as e:
+                    print(f"Error during menu initialization: {e}")
+                    traceback.print_exc()
+                    return False
+
             if threading.current_thread() is threading.main_thread():
-                setup_menu()
+                return init_on_main()
             else:
-                AppHelper.callAfter(setup_menu)
-            print("macOS menu initialized successfully")
+                # メインスレッド以外から呼び出された場合
+                event = threading.Event()
+                result = {'success': False}
+                
+                def wrapped_init():
+                    try:
+                        result['success'] = init_on_main()
+                    finally:
+                        event.set()
+                
+                if AppHelper is None:
+                    print("Error: AppHelper not available for menu initialization")
+                    return False
+                    
+                try:
+                    AppHelper.callAfter(wrapped_init)
+                except Exception as e:
+                    print(f"Error scheduling menu initialization on main thread: {e}")
+                    traceback.print_exc()
+                    return False
+                    
+                if not event.wait(timeout=1.0):  # タイムアウトを設定
+                    print("Warning: Menu initialization timed out")
+                    return False
+                    
+                return result['success']
+                
         except Exception as e:
-            print(f"Error initializing macOS menu: {e}")
-            import traceback
+            print(f"Critical error in macOS menu initialization: {e}")
             traceback.print_exc()
+            return False
 
     def setup_platform(self):
         """プラットフォーム固有の設定を初期化"""
@@ -270,42 +373,66 @@ class DesktopAssistant:
         Icon, Menu, MenuItem = get_pystray()
         
         def on_open(icon, item):
+            """チャットウィンドウを開く処理"""
             print("Menu: チャットを開く clicked")
             if IS_MACOS:
-                # macOSの場合はAppHelperを使用してメインスレッドで表示
-                from PyObjCTools import AppHelper
-                def show_window():
-                    try:
-                        window = webview.windows[0]
-                        if window:
-                            window.show()
-                            print("Window show command executed on main thread")
-                    except Exception as e:
-                        print(f"Error showing window: {e}")
-                AppHelper.callAfter(show_window)
+                try:
+                    window = webview.windows[0]
+                    if window:
+                        # execute_on_main_threadを使用して状態管理を改善
+                        def show_and_verify():
+                            try:
+                                window.show()
+                                print("Window show command executed on main thread")
+                                # 状態の検証
+                                if verify_window_state(window, True, "show from tray"):
+                                    print("Window shown successfully from tray")
+                                else:
+                                    print("Warning: Window may not be properly shown from tray")
+                            except Exception as e:
+                                print(f"Error showing window from tray: {e}")
+                                traceback.print_exc()
+                        
+                        self.execute_on_main_thread(show_and_verify)
+                except Exception as e:
+                    print(f"Error accessing window in on_open: {e}")
+                    traceback.print_exc()
             else:
                 # 他のプラットフォームではイベントキューを使用
                 self.event_queue.put("open_chat")
 
         def on_quit(icon, item):
+            """アプリケーション終了処理"""
             print("Menu: 終了 clicked")
             if IS_MACOS:
-                # macOSの場合はメインスレッドでクリーンアップ
-                from PyObjCTools import AppHelper
-                def cleanup():
-                    try:
-                        # ウィンドウを非表示
-                        window = webview.windows[0]
-                        if window:
-                            window.hide()
-                        # 終了処理
-                        self.event_queue.put("quit")
-                        self.stop_event.set()
-                        icon.stop()
-                        print("Cleanup executed on main thread")
-                    except Exception as e:
-                        print(f"Error during cleanup: {e}")
-                AppHelper.callAfter(cleanup)
+                try:
+                    window = webview.windows[0]
+                    if window:
+                        # execute_on_main_threadを使用して状態管理を改善
+                        def cleanup_and_verify():
+                            try:
+                                # ウィンドウを非表示
+                                window.hide()
+                                print("Window hide command executed on main thread")
+                                # 状態の検証
+                                if verify_window_state(window, False, "hide from tray"):
+                                    print("Window hidden successfully from tray")
+                                else:
+                                    print("Warning: Window may not be properly hidden from tray")
+                                
+                                # 終了処理
+                                self.event_queue.put("quit")
+                                self.stop_event.set()
+                                icon.stop()
+                                print("Cleanup executed on main thread")
+                            except Exception as e:
+                                print(f"Error during cleanup from tray: {e}")
+                                traceback.print_exc()
+                        
+                        self.execute_on_main_thread(cleanup_and_verify)
+                except Exception as e:
+                    print(f"Error accessing window in on_quit: {e}")
+                    traceback.print_exc()
             else:
                 self.event_queue.put("quit")
                 self.stop_event.set()
@@ -328,10 +455,59 @@ class DesktopAssistant:
         
         # macOSの場合はメインスレッドでアイコンを初期化
         if IS_MACOS:
-            from PyObjCTools import AppHelper
-            AppHelper.callAfter(self.tray_icon.run)
+            def init_tray():
+                try:
+                    self.tray_icon.run()
+                    print("Tray icon initialized on main thread")
+                except Exception as e:
+                    print(f"Error initializing tray icon: {e}")
+                    traceback.print_exc()
+            
+            self.execute_on_main_thread(init_tray)
             
         return self.tray_icon
+
+    def verify_window_state(self, window, expected_state, operation):
+        """ウィンドウの状態を検証し、期待される状態と一致するまで待機"""
+        max_retries = 5
+        retry_delay = 0.1
+        
+        for i in range(max_retries):
+            actual_state = getattr(window, 'visible', None)
+            if actual_state == expected_state:
+                print(f"Window state verified: visible={actual_state}")
+                return True
+            print(f"Window state mismatch (attempt {i+1}/{max_retries}): "
+                  f"expected={expected_state}, actual={actual_state}")
+            time.sleep(retry_delay)
+        
+        print(f"Warning: Failed to verify window state after {operation}")
+        return False
+
+    def execute_on_main_thread(self, func, *args, **kwargs):
+        """メインスレッドでの実行を保証"""
+        if IS_MACOS:
+            from PyObjCTools import AppHelper
+            event = threading.Event()
+            result = {'success': False, 'error': None}
+            
+            def wrapped_func():
+                try:
+                    func(*args, **kwargs)
+                    result['success'] = True
+                except Exception as e:
+                    result['error'] = e
+                finally:
+                    event.set()
+            
+            AppHelper.callAfter(wrapped_func)
+            event.wait(timeout=1.0)  # タイムアウトを設定
+            
+            if result['error']:
+                raise result['error']
+            return result['success']
+        else:
+            return func(*args, **kwargs)
 
     def window_manager(self, target_window):
         """ウィンドウの表示状態を管理する関数"""
@@ -349,29 +525,47 @@ class DesktopAssistant:
                     print("Showing window...")
                     print(f"Current window state: visible={getattr(window, 'visible', None)}")
                     try:
-                        window.show()
-                        print("Window show command executed successfully")
+                        def show_window():
+                            window.show()
+                            print("Window show command executed")
+                        
+                        self.execute_on_main_thread(show_window)
+                        
+                        # 状態の検証
+                        if self.verify_window_state(window, True, "show"):
+                            print("Window shown successfully")
+                        else:
+                            print("Warning: Window may not be properly shown")
+                            
                     except Exception as e:
                         print(f"Error showing window: {e}")
                         traceback.print_exc()
-                    print(f"New window state: visible={getattr(window, 'visible', None)}")
+                        
                 elif event == "quit":
                     print("Hiding window and cleaning up...")
                     print(f"Current window state: visible={getattr(window, 'visible', None)}")
                     try:
-                        window.hide()
-                        print("Window hide command executed successfully")
-                        # ウィンドウが非表示になるのを待つ
-                        if IS_MACOS:
-                            time.sleep(0.1)
+                        def hide_window():
+                            window.hide()
+                            print("Window hide command executed")
+                        
+                        self.execute_on_main_thread(hide_window)
+                        
+                        # 状態の検証
+                        if self.verify_window_state(window, False, "hide"):
+                            print("Window hidden successfully")
+                        else:
+                            print("Warning: Window may not be properly hidden")
+                            
                     except Exception as e:
                         print(f"Error hiding window: {e}")
                         traceback.print_exc()
-                    print(f"New window state: visible={getattr(window, 'visible', None)}")
-                    print("Window hide command executed")
+                    
                     self.stop_event.set()
                     return True  # 終了を示す
+                    
                 return False  # 継続を示す
+                
             except Exception as e:
                 print(f"Error handling event {event}: {e}")
                 traceback.print_exc()
@@ -399,64 +593,110 @@ class DesktopAssistant:
         """アプリケーションのクリーンアップ処理"""
         print("Starting cleanup...")
         
-        # 音声ハンドラーの停止
-        if self.voice_handler:
-            print("Stopping voice handler...")
+        def cleanup_resources():
+            """リソースのクリーンアップを実行"""
+            cleanup_success = True
+            
+            # 音声ハンドラーの停止
+            if self.voice_handler:
+                print("Stopping voice handler...")
+                try:
+                    self.voice_handler.stop()
+                    print("Voice handler stopped")
+                except Exception as e:
+                    print(f"Error stopping voice handler: {e}")
+                    cleanup_success = False
+            
+            # 停止イベントの設定
+            print("Setting stop event...")
+            self.stop_event.set()
+            print("Stop event set")
+
+            # ウィンドウの非表示化（メインスレッドで実行）
+            if hasattr(self, 'window') and self.window:
+                print("Hiding window...")
+                try:
+                    window = webview.windows[0] if IS_MACOS else self.window
+                    def hide_window():
+                        try:
+                            window.hide()
+                            print("Window hide command executed")
+                            return self.verify_window_state(window, False, "cleanup hide")
+                        except Exception as e:
+                            print(f"Error hiding window: {e}")
+                            traceback.print_exc()
+                            return False
+                    
+                    if not self.execute_on_main_thread(hide_window):
+                        print("Warning: Failed to hide window during cleanup")
+                        cleanup_success = False
+                    else:
+                        print("Window hidden successfully")
+                except Exception as e:
+                    print(f"Error during window cleanup: {e}")
+                    traceback.print_exc()
+                    cleanup_success = False
+
+            # イベントキューをクリア
+            print("Clearing event queue...")
             try:
-                self.voice_handler.stop()
-                print("Voice handler stopped")
-            except Exception as e:
-                print(f"Error stopping voice handler: {e}")
-        
-        # 停止イベントの設定
-        print("Setting stop event...")
-        self.stop_event.set()
-        print("Stop event set")
+                while True:
+                    self.event_queue.get_nowait()
+            except Empty:
+                pass
+            print("Event queue cleared")
 
-        # ウィンドウの非表示化（メインスレッドで実行）
-        if hasattr(self, 'window') and self.window:
-            print("Hiding window...")
-            try:
-                if sys.platform == 'darwin':
-                    # macOSの場合は直接ウィンドウを非表示
-                    webview.windows[0].hide()
-                else:
-                    self.window.hide()
-                print("Window hidden")
-            except Exception as e:
-                print(f"Error hiding window: {e}")
+            # システムトレイアイコンの停止
+            if hasattr(self, 'tray_icon'):
+                print("Stopping system tray icon...")
+                try:
+                    def stop_tray():
+                        try:
+                            self.tray_icon.stop()
+                            print("System tray icon stopped")
+                            return True
+                        except Exception as e:
+                            print(f"Error stopping tray icon: {e}")
+                            traceback.print_exc()
+                            return False
+                    
+                    if IS_MACOS:
+                        if not self.execute_on_main_thread(stop_tray):
+                            print("Warning: Failed to stop tray icon")
+                            cleanup_success = False
+                    else:
+                        if not stop_tray():
+                            cleanup_success = False
+                except Exception as e:
+                    print(f"Error during tray icon cleanup: {e}")
+                    traceback.print_exc()
+                    cleanup_success = False
 
-        # イベントキューをクリア
-        print("Clearing event queue...")
-        try:
-            while True:
-                self.event_queue.get_nowait()
-        except Empty:
-            pass
-        print("Event queue cleared")
+            return cleanup_success
 
-        # システムトレイアイコンの停止
-        if hasattr(self, 'tray_icon'):
-            print("Stopping system tray icon...")
-            try:
-                self.tray_icon.stop()
-                print("System tray icon stopped")
-            except Exception as e:
-                print(f"Error stopping tray icon: {e}")
+        # メインスレッドで実行するか判断
+        if IS_MACOS and not threading.current_thread() is threading.main_thread():
+            print("Cleanup called from non-main thread, executing on main thread...")
+            cleanup_result = self.execute_on_main_thread(cleanup_resources)
+        else:
+            cleanup_result = cleanup_resources()
 
-        print("Cleanup completed")
+        print("Cleanup completed" if cleanup_result else "Cleanup completed with errors")
         
         # プロセスの終了を確実に
         try:
             if threading.current_thread() is threading.main_thread():
+                if not cleanup_result:
+                    print("Warning: Cleanup had errors, but proceeding with exit")
                 sys.exit(0)
             else:
                 # メインスレッド以外からの終了時は、メインスレッドに終了を通知
-                print("Cleanup called from non-main thread, requesting main thread exit...")
+                print("Requesting main thread exit...")
                 self.event_queue.put("quit")
         except Exception as e:
             print(f"Error during exit: {e}")
             traceback.print_exc()
+            print("Forcing exit due to cleanup failure")
             os._exit(1)  # 強制終了
 
     def run(self):
