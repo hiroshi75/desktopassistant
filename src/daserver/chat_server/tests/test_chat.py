@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocket, WebSocketDisconnect
 import asyncio
-from app.main import app
+from daserver.chat_server.app.main import app
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 

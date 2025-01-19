@@ -11,7 +11,7 @@ from typing import Optional
 import rumps
 import webview
 
-from .main import HTML_TEMPLATE
+from desktopassistant.main import HTML_TEMPLATE
 
 class MacOSMenuBarApp(rumps.App):
     """macOS用のメニューバーアプリケーション

@@ -5,7 +5,7 @@ import threading
 from unittest.mock import patch, MagicMock, call
 
 # メインアプリケーションのパスを追加
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 # プラットフォーム判定
 IS_MACOS = sys.platform == 'darwin'
@@ -26,10 +26,15 @@ class TestSystemTray(unittest.TestCase):
         # アプリケーションの初期化
         app = MacOSMenuBarApp()
         
-        # チャットを開く操作のテスト
-        app.open_chat(None)
+        # メニュー項目のクリックをシミュレート
+        menu_items = app.menu
+        open_chat_item = next(item for item in menu_items if "チャットを開く" in str(item))
+        open_chat_item._callback(None)  # rumpsのメニュー項目をクリック
+        
+        # ウィンドウが作成され、表示されることを確認
         mock_webview.create_window.assert_called_once()
         mock_app_helper.callAfter.assert_called_with(mock_window.show)
+        self.assertIsNotNone(app._window)
         
         # 終了操作のテスト
         app.quit_app(None)

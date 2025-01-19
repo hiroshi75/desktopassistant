@@ -1,3 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desktopassistant"
+version = "0.1.0"
+description = "A desktop assistant with voice recognition and chat interface"
+requires-python = ">=3.12"
+authors = [
+    {name = "hiroshi75"}
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.ruff]
 line-length = 88  # Match black's default line length
 target-version = "py312"  # We're using Python 3.12

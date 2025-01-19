@@ -44,7 +44,7 @@ class DesktopAssistant:
     def setup_platform(self):
         """プラットフォーム固有の初期化を行う"""
         if IS_MACOS:
-            from .macos_rumps_app import MacOSMenuBarApp
+            from desktopassistant.macos_rumps_app import MacOSMenuBarApp
             self._rumps_app = MacOSMenuBarApp()
 
     def create_icon(self):
