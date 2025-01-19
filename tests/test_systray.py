@@ -4,11 +4,15 @@ import sys
 import os
 from unittest.mock import patch, MagicMock
 
+# macOSではウェイクワード機能を無効化
+ENABLE_VOICE_HANDLER = sys.platform != 'darwin'
+
 # メインアプリケーションのパスを追加
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class TestSystemTray(unittest.TestCase):
     @patch('desktopassistant.main.get_pystray')
+    @unittest.skipIf(sys.platform == 'darwin', 'Voice handler is disabled on macOS')
     @patch('desktopassistant.main.VoiceHandler')
     def test_event_queue(self, mock_voice_handler, mock_get_pystray):
         """イベントキューのテスト"""

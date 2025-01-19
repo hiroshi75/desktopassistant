@@ -3,6 +3,11 @@ import threading
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
+import sys
+from typing import Optional
+
+# macOSではウェイクワード機能を無効化
+ENABLE_VOICE_HANDLER = sys.platform != 'darwin'
 
 # Lazy import of pystray to improve testability
 def get_pystray():
@@ -23,6 +28,16 @@ class DesktopAssistant:
         self.window = None
         self.event_queue = Queue()
         self.stop_event = threading.Event()
+        self.voice_handler: Optional['VoiceHandler'] = None
+        
+        # macOS以外の場合のみVoiceHandlerを初期化
+        if ENABLE_VOICE_HANDLER:
+            try:
+                from .voice_handler import VoiceHandler
+                self.voice_handler = VoiceHandler("path/to/model", self.event_queue)
+                self.voice_handler.start_background()
+            except ImportError:
+                print("Warning: Voice recognition features are not available")
 
     def create_icon(self):
         """システムトレイアイコンの作成
@@ -73,7 +88,9 @@ class DesktopAssistant:
                         height=600,
                         on_top=True
                     )
-                    webview.start(gui='qt')
+                    # macOSではcocoa、その他ではqtをバックエンドとして使用
+                    gui_backend = 'cocoa' if sys.platform == 'darwin' else 'qt'
+                    webview.start(gui=gui_backend)
                     self.window = None
             elif event == "quit":
                 break
@@ -88,8 +105,14 @@ class DesktopAssistant:
         )
         tray_thread.start()
 
-        # メインスレッドでWebViewを管理（UIの要件）
-        self.manage_webview()
+        try:
+            # メインスレッドでWebViewを管理（UIの要件）
+            self.manage_webview()
+        finally:
+            # 終了時のクリーンアップ
+            if self.voice_handler:
+                self.voice_handler.stop()
+            self.stop_event.set()
 
 if __name__ == "__main__":
     app = DesktopAssistant()
