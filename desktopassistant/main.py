@@ -375,31 +375,14 @@ class DesktopAssistant:
         def on_open(icon, item):
             """チャットウィンドウを開く処理"""
             print("Menu: チャットを開く clicked")
-            if IS_MACOS:
-                try:
-                    window = webview.windows[0]
-                    if window:
-                        # execute_on_main_threadを使用して状態管理を改善
-                        def show_and_verify():
-                            try:
-                                window.show()
-                                print("Window show command executed on main thread")
-                                # 状態の検証
-                                if verify_window_state(window, True, "show from tray"):
-                                    print("Window shown successfully from tray")
-                                else:
-                                    print("Warning: Window may not be properly shown from tray")
-                            except Exception as e:
-                                print(f"Error showing window from tray: {e}")
-                                traceback.print_exc()
-                        
-                        self.execute_on_main_thread(show_and_verify)
-                except Exception as e:
-                    print(f"Error accessing window in on_open: {e}")
-                    traceback.print_exc()
-            else:
-                # 他のプラットフォームではイベントキューを使用
+            try:
+                # プラットフォームに関係なくイベントキューを使用
+                print("Queueing open_chat event")
                 self.event_queue.put("open_chat")
+                print("open_chat event queued successfully")
+            except Exception as e:
+                print(f"Error queueing open_chat event: {e}")
+                traceback.print_exc()
 
         def on_quit(icon, item):
             """アプリケーション終了処理"""
@@ -415,7 +398,7 @@ class DesktopAssistant:
                                 window.hide()
                                 print("Window hide command executed on main thread")
                                 # 状態の検証
-                                if verify_window_state(window, False, "hide from tray"):
+                                if self.verify_window_state(window, False, "hide from tray"):
                                     print("Window hidden successfully from tray")
                                 else:
                                     print("Warning: Window may not be properly hidden from tray")
@@ -469,17 +452,33 @@ class DesktopAssistant:
 
     def verify_window_state(self, window, expected_state, operation):
         """ウィンドウの状態を検証し、期待される状態と一致するまで待機"""
-        max_retries = 5
-        retry_delay = 0.1
+        max_retries = 10  # リトライ回数を増やす
+        retry_delay = 0.2  # 遅延を増やす
         
         for i in range(max_retries):
-            actual_state = getattr(window, 'visible', None)
-            if actual_state == expected_state:
-                print(f"Window state verified: visible={actual_state}")
-                return True
-            print(f"Window state mismatch (attempt {i+1}/{max_retries}): "
-                  f"expected={expected_state}, actual={actual_state}")
-            time.sleep(retry_delay)
+            try:
+                actual_state = getattr(window, 'visible', None)
+                if actual_state == expected_state:
+                    print(f"Window state verified: visible={actual_state}")
+                    return True
+                
+                print(f"Window state mismatch (attempt {i+1}/{max_retries}): "
+                      f"expected={expected_state}, actual={actual_state}")
+                
+                # ウィンドウの状態を再確認
+                if window and hasattr(window, 'native'):
+                    native_window = window.native
+                    if native_window and hasattr(native_window, 'isVisible'):
+                        native_visible = native_window.isVisible()
+                        print(f"Native window visibility: {native_visible}")
+                
+                time.sleep(retry_delay)
+            except Exception as e:
+                print(f"Error checking window state (attempt {i+1}/{max_retries}): {e}")
+                if i < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                break
         
         print(f"Warning: Failed to verify window state after {operation}")
         return False
@@ -500,12 +499,31 @@ class DesktopAssistant:
                 finally:
                     event.set()
             
-            AppHelper.callAfter(wrapped_func)
-            event.wait(timeout=1.0)  # タイムアウトを設定
+            # メインスレッドでの実行をより確実に
+            max_retries = 3
+            retry_delay = 0.5
             
-            if result['error']:
-                raise result['error']
-            return result['success']
+            for attempt in range(max_retries):
+                AppHelper.callAfter(wrapped_func)
+                if event.wait(timeout=2.0):  # タイムアウトを2秒に延長
+                    if result['error']:
+                        if attempt < max_retries - 1:
+                            print(f"Attempt {attempt + 1}/{max_retries} failed, retrying...")
+                            event.clear()
+                            time.sleep(retry_delay)
+                            continue
+                        raise result['error']
+                    return result['success']
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"Attempt {attempt + 1}/{max_retries} timed out, retrying...")
+                        event.clear()
+                        time.sleep(retry_delay)
+                        continue
+                    print("All attempts to execute on main thread timed out")
+                    return False
+            
+            return False
         else:
             return func(*args, **kwargs)
 

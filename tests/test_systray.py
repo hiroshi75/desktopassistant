@@ -158,5 +158,43 @@ class TestSystemTray(unittest.TestCase):
             app.execute_on_main_thread(show_window)
             window.show.assert_called_once()
 
+    @patch('desktopassistant.main.IS_MACOS', True)
+    @patch('desktopassistant.main.get_pystray')
+    @patch('desktopassistant.main.webview')
+    def test_macos_tray_click_opens_chat(self, mock_webview, mock_get_pystray):
+        """macOSでのトレイメニュークリックのテスト"""
+        # モックの設定
+        mock_window = MagicMock()
+        mock_window.visible = False
+        mock_webview.windows = [mock_window]
+        
+        mock_icon = MagicMock()
+        mock_menu = MagicMock()
+        mock_menu_item = MagicMock()
+        mock_get_pystray.return_value = (mock_icon, mock_menu, mock_menu_item)
+        
+        # アプリケーションの初期化
+        from desktopassistant.main import DesktopAssistant
+        app = DesktopAssistant()
+        
+        # トレイアイコンのセットアップ
+        tray_icon = app.setup_tray_icon()
+        
+        # メニューアイテムのクリックをシミュレート
+        menu_items = [item for item in tray_icon.menu]
+        open_chat_item = next(item for item in menu_items if "チャットを開く" in str(item))
+        open_chat_item(mock_icon)
+        
+        # イベントキューを確認
+        event = app.event_queue.get_nowait()
+        self.assertEqual(event, "open_chat")
+        
+        # イベントの処理をシミュレート
+        app.window_manager(mock_window)
+        
+        # ウィンドウの状態を検証
+        self.assertTrue(mock_window.show.called)
+        self.assertTrue(getattr(mock_window, 'visible', False))
+
 if __name__ == '__main__':
     unittest.main()
