@@ -1,8 +1,13 @@
 import webview
 import threading
+import sys
+import traceback
 from PIL import Image, ImageDraw
 from queue import Queue
 import os
+
+# プラットフォーム判定
+IS_MACOS = sys.platform == 'darwin'
 
 # Lazy import of pystray to improve testability
 def get_pystray():
@@ -23,6 +28,24 @@ class DesktopAssistant:
         self.window = None
         self.event_queue = Queue()
         self.stop_event = threading.Event()
+        self._rumps_app = None
+        self.setup_platform()
+        
+    def setup_platform(self):
+        """プラットフォーム固有の初期化を行う"""
+        if IS_MACOS:
+            try:
+                from .macos_rumps_app import MacOSMenuBarApp
+                self._rumps_app = MacOSMenuBarApp()
+                if self._rumps_app is not None:
+                    self._rumps_app.event_queue = self.event_queue
+                    print("macOS menu bar app initialized successfully")
+                else:
+                    print("Warning: Failed to initialize macOS menu bar app")
+            except Exception as e:
+                print(f"Error initializing macOS menu bar app: {e}")
+                traceback.print_exc()
+                self._rumps_app = None
 
     def create_icon(self):
         """システムトレイアイコンの作成"""
@@ -69,6 +92,29 @@ class DesktopAssistant:
 
     def run(self):
         """アプリケーションの実行"""
+        if IS_MACOS:
+            # macOSの場合はrumpsアプリを実行
+            if self._rumps_app is not None:
+                try:
+                    if threading.current_thread() is threading.main_thread():
+                        self._rumps_app.run()
+                    else:
+                        from PyObjCTools import AppHelper
+                        AppHelper.callAfter(self._rumps_app.run)
+                except Exception as e:
+                    print(f"Error running macOS menu bar app: {e}")
+                    traceback.print_exc()
+                    # フォールバック: pystrayを使用
+                    print("Falling back to pystray implementation")
+                    self._fallback_to_pystray()
+            else:
+                print("macOS menu bar app not initialized, falling back to pystray")
+                self._fallback_to_pystray()
+        else:
+            self._fallback_to_pystray()
+            
+    def _fallback_to_pystray(self):
+        """pystrayを使用したフォールバック実装"""
         # システムトレイアイコンのスレッド開始
         tray_thread = threading.Thread(
             target=self.setup_tray_icon,
