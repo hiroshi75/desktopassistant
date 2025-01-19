@@ -97,16 +97,10 @@ class DesktopAssistant:
 
     def run(self):
         """アプリケーションの実行"""
-        # システムトレイアイコンを別スレッドで実行
-        tray_thread = threading.Thread(
-            target=self.setup_tray_icon,
-            args=(),
-            daemon=True
-        )
-        tray_thread.start()
-
         try:
-            # メインスレッドでWebViewを管理（UIの要件）
+            # システムトレイとWebViewをメインスレッドで実行
+            self.setup_tray_icon()
+            # メインスレッドでWebViewを管理
             self.manage_webview()
         finally:
             # 終了時のクリーンアップ

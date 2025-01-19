@@ -12,9 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class TestSystemTray(unittest.TestCase):
     @patch('desktopassistant.main.get_pystray')
-    @unittest.skipIf(sys.platform == 'darwin', 'Voice handler is disabled on macOS')
-    @patch('desktopassistant.voice_handler.VoiceHandler', create=True)
-    def test_event_queue(self, mock_voice_handler, mock_get_pystray):
+    def test_event_queue(self, mock_get_pystray):
         """イベントキューのテスト"""
         # モックpystrayコンポーネントの設定
         mock_icon = MagicMock()
@@ -24,9 +22,6 @@ class TestSystemTray(unittest.TestCase):
         
         # Import here to avoid early pystray initialization
         from desktopassistant.main import DesktopAssistant
-        
-        # モックの設定
-        mock_voice_handler.return_value.start_background.return_value = MagicMock()
         
         app = DesktopAssistant()
         
