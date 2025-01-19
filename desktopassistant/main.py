@@ -147,16 +147,27 @@ class DesktopAssistant:
                 
                 if event == "open_chat":
                     print("Showing window...")
-                    if not getattr(window, 'visible', False):
+                    print(f"Current window state: visible={getattr(window, 'visible', None)}")
+                    try:
                         window.show()
-                    print("Window show command executed")
+                        print("Window show command executed successfully")
+                    except Exception as e:
+                        print(f"Error showing window: {e}")
+                        traceback.print_exc()
+                    print(f"New window state: visible={getattr(window, 'visible', None)}")
                 elif event == "quit":
                     print("Hiding window and cleaning up...")
-                    if getattr(window, 'visible', False):
+                    print(f"Current window state: visible={getattr(window, 'visible', None)}")
+                    try:
                         window.hide()
+                        print("Window hide command executed successfully")
                         # ウィンドウが非表示になるのを待つ
                         if IS_MACOS:
                             time.sleep(0.1)
+                    except Exception as e:
+                        print(f"Error hiding window: {e}")
+                        traceback.print_exc()
+                    print(f"New window state: visible={getattr(window, 'visible', None)}")
                     print("Window hide command executed")
                     self.stop_event.set()
                     return True  # 終了を示す
@@ -262,10 +273,16 @@ class DesktopAssistant:
                     width=400,
                     height=600,
                     on_top=True,
-                    hidden=True  # 初期状態では非表示
+                    hidden=True,  # 初期状態では非表示
+                    frameless=IS_MACOS,  # macOSではフレームレスウィンドウを使用
+                    easy_drag=True,  # ドラッグ可能に
+                    text_select=True,  # テキスト選択を許可
+                    transparent=IS_MACOS,  # macOSでは透過を有効に
                 )
                 print("Window created successfully")
                 print(f"Initial window state: visible={getattr(self.window, 'visible', None)}")
+                print(f"Window properties: frameless={getattr(self.window, 'frameless', None)}, "
+                      f"transparent={getattr(self.window, 'transparent', None)}")
 
                 # システムトレイとWebViewをメインスレッドで実行
                 print(f"Starting application with {self.gui_backend} backend...")
