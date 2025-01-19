@@ -26,12 +26,8 @@ sys.modules['rumps'] = mock_rumps
 sys.modules['desktopassistant.main'] = mock_main
 
 # PyObjCToolsのモック化
-class MockAppHelper:
-    @staticmethod
-    def callAfter(func, *args, **kwargs):
-        func(*args, **kwargs)
-
-mock_app_helper.callAfter = MockAppHelper.callAfter
+mock_app_helper = MagicMock()
+mock_app_helper.callAfter = MagicMock(side_effect=lambda func, *args, **kwargs: func(*args, **kwargs))
 sys.modules['PyObjCTools.AppHelper'] = mock_app_helper
 
 # rumpsの基本的な機能をモック化
@@ -58,33 +54,35 @@ class TestSystemTray(unittest.TestCase):
         mock_webview.windows = []
         mock_webview.create_window.return_value = mock_window
         
-        from desktopassistant.macos_rumps_app import MacOSMenuBarApp
-        app = MacOSMenuBarApp()
-        
-        # チャットを開く操作のテスト
-        with patch('threading.current_thread', return_value=threading.main_thread()):
-            app.open_chat(None)
-        
-        # ウィンドウが作成され、表示されることを確認
-        mock_webview.create_window.assert_called_once_with(
-            title="デスクトップアシスタント",
-            html=mock_html_template,
-            width=400,
-            height=600,
-            resizable=True,
-            frameless=True,
-            easy_drag=True,
-            background_color="#00000000",
-            transparent=True,
-            on_top=True
-        )
-        self.assertTrue(mock_window.show.called)
-        self.assertIsNotNone(app._window)
-        
-        # 終了操作のテスト
-        app.quit_app(None)
-        self.assertTrue(mock_window.hide.called)
-        self.assertIsNone(app._window)
+        # モジュールのインポート前にモックを設定
+        with patch('desktopassistant.macos_rumps_app.HTML_TEMPLATE', mock_html_template):
+            from desktopassistant.macos_rumps_app import MacOSMenuBarApp
+            app = MacOSMenuBarApp()
+            
+            # チャットを開く操作のテスト
+            with patch('threading.current_thread', return_value=threading.main_thread()):
+                app.open_chat(None)
+            
+            # ウィンドウが作成され、表示されることを確認
+            mock_webview.create_window.assert_called_once_with(
+                title="デスクトップアシスタント",
+                html=mock_html_template,
+                width=400,
+                height=600,
+                resizable=True,
+                frameless=True,
+                easy_drag=True,
+                background_color="#00000000",
+                transparent=True,
+                on_top=True
+            )
+            self.assertTrue(mock_window.show.called)
+            self.assertIsNotNone(app._window)
+            
+            # 終了操作のテスト
+            app.quit_app(None)
+            self.assertTrue(mock_window.hide.called)
+            self.assertIsNone(app._window)
     
     def test_window_thread_safety(self):
         """ウィンドウ操作のスレッドセーフティテスト"""
