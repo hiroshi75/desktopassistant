@@ -49,8 +49,6 @@ class MacOSMenuBarApp(rumps.App):
         存在しない場合は新しいウィンドウを作成します。
         すべてのウィンドウ操作はメインスレッドで実行されます。
         """
-        from PyObjCTools import AppHelper
-        
         def create_window():
             if not self._window:
                 if webview.windows:
@@ -72,7 +70,12 @@ class MacOSMenuBarApp(rumps.App):
         if threading.current_thread() is threading.main_thread():
             create_window()
         else:
-            AppHelper.callAfter(create_window)
+            try:
+                from PyObjCTools import AppHelper
+                AppHelper.callAfter(create_window)
+            except ImportError:
+                # テスト環境などでPyObjCToolsが利用できない場合は直接実行
+                create_window()
     
     @rumps.clicked("チャットを開く")
     def open_chat(self, _) -> None:
@@ -84,8 +87,15 @@ class MacOSMenuBarApp(rumps.App):
         try:
             self._ensure_window_exists()
             if self._window:
-                from PyObjCTools import AppHelper
-                AppHelper.callAfter(self._window.show)
+                if threading.current_thread() is threading.main_thread():
+                    self._window.show()
+                else:
+                    try:
+                        from PyObjCTools import AppHelper
+                        AppHelper.callAfter(self._window.show)
+                    except ImportError:
+                        # テスト環境などでPyObjCToolsが利用できない場合は直接実行
+                        self._window.show()
         except Exception as e:
             print(f"Error in open_chat: {e}")
             rumps.notification(
@@ -103,8 +113,15 @@ class MacOSMenuBarApp(rumps.App):
         try:
             # チャットウィンドウが存在する場合は閉じる
             if self._window:
-                from PyObjCTools import AppHelper
-                AppHelper.callAfter(self._window.hide)
+                if threading.current_thread() is threading.main_thread():
+                    self._window.hide()
+                else:
+                    try:
+                        from PyObjCTools import AppHelper
+                        AppHelper.callAfter(self._window.hide)
+                    except ImportError:
+                        # テスト環境などでPyObjCToolsが利用できない場合は直接実行
+                        self._window.hide()
                 self._window = None
             
             # アプリケーションを終了
