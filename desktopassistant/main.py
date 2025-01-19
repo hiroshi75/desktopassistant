@@ -25,11 +25,22 @@ class DesktopAssistant:
         self.stop_event = threading.Event()
 
     def create_icon(self):
-        """システムトレイアイコンの作成"""
-        image = Image.new("RGB", (64, 64), (255, 255, 255))
+        """システムトレイアイコンの作成
+        
+        macOSメニューバー用に透過背景とRetinaディスプレイ用の高解像度に対応
+        """
+        # macOSのメニューバーアイコン用に2倍の解像度で作成
+        image = Image.new("RGBA", (128, 128), (0, 0, 0, 0))  # 透明背景
         draw = ImageDraw.Draw(image)
-        draw.ellipse((16, 16, 48, 48), fill="#007bff")
-        return image
+        
+        # 円を描画（中心に配置）
+        margin = 32  # 余白
+        size = 128 - (margin * 2)  # 円のサイズ
+        draw.ellipse((margin, margin, margin + size, margin + size), 
+                    fill="#007bff")
+        
+        # 表示サイズにリサイズ（アンチエイリアス有効）
+        return image.resize((64, 64), Image.Resampling.LANCZOS)
 
     def setup_tray_icon(self):
         """システムトレイアイコンのセットアップ"""
@@ -69,7 +80,7 @@ class DesktopAssistant:
 
     def run(self):
         """アプリケーションの実行"""
-        # システムトレイアイコンのスレッド開始
+        # システムトレイアイコンを別スレッドで実行
         tray_thread = threading.Thread(
             target=self.setup_tray_icon,
             args=(),
@@ -77,7 +88,7 @@ class DesktopAssistant:
         )
         tray_thread.start()
 
-        # WebViewの管理（メインループ）
+        # メインスレッドでWebViewを管理（UIの要件）
         self.manage_webview()
 
 if __name__ == "__main__":

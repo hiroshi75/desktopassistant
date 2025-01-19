@@ -97,10 +97,22 @@ HTML_TEMPLATE = """
 
 # システムトレイアイコン用の画像を作成
 def create_icon():
-    image = Image.new("RGB", (64, 64), (255, 255, 255))
+    """システムトレイアイコンの作成
+    
+    macOSメニューバー用に透過背景とRetinaディスプレイ用の高解像度に対応
+    """
+    # macOSのメニューバーアイコン用に2倍の解像度で作成
+    image = Image.new("RGBA", (128, 128), (0, 0, 0, 0))  # 透明背景
     draw = ImageDraw.Draw(image)
-    draw.ellipse((16, 16, 48, 48), fill="blue")
-    return image
+    
+    # 円を描画（中心に配置）
+    margin = 32  # 余白
+    size = 128 - (margin * 2)  # 円のサイズ
+    draw.ellipse((margin, margin, margin + size, margin + size), 
+                fill="#007bff")
+    
+    # 表示サイズにリサイズ（アンチエイリアス有効）
+    return image.resize((64, 64), Image.Resampling.LANCZOS)
 
 
 # システムトレイのセットアップ
@@ -143,5 +155,5 @@ if __name__ == "__main__":
     )
     tray_thread.start()
 
-    # メインスレッドでWebViewを管理
+    # メインスレッドでWebViewを管理（UIの要件）
     manage_webview(event_queue)
