@@ -36,6 +36,127 @@ class TestSystemTray(unittest.TestCase):
         app.event_queue.put("quit")
         event = app.event_queue.get()
         self.assertEqual(event, "quit")
+        
+    @patch('desktopassistant.main.get_pystray')
+    @patch('desktopassistant.main.webview')
+    def test_macos_window_state(self, mock_webview, mock_get_pystray):
+        """macOSウィンドウ状態管理のテスト"""
+        # モックの設定
+        mock_window = MagicMock()
+        mock_window.visible = False
+        mock_webview.windows = [mock_window]
+        
+        mock_icon = MagicMock()
+        mock_menu = MagicMock()
+        mock_menu_item = MagicMock()
+        mock_get_pystray.return_value = (mock_icon, mock_menu, mock_menu_item)
+        
+        # プラットフォームをmacOSに設定
+        with patch('desktopassistant.main.IS_MACOS', True):
+            from desktopassistant.main import DesktopAssistant
+            app = DesktopAssistant()
+            
+            # ウィンドウの表示状態を検証
+            self.assertFalse(app.verify_window_state(mock_window, False, "initial"))
+            
+            # ウィンドウを表示
+            mock_window.visible = True
+            self.assertTrue(app.verify_window_state(mock_window, True, "show"))
+            
+            # ウィンドウを非表示
+            mock_window.visible = False
+            self.assertTrue(app.verify_window_state(mock_window, False, "hide"))
+            
+    @patch('desktopassistant.main.get_pystray')
+    @patch('desktopassistant.main.webview')
+    def test_macos_menu_initialization(self, mock_webview, mock_get_pystray):
+        """macOSメニュー初期化のテスト"""
+        # モックの設定
+        mock_icon = MagicMock()
+        mock_menu = MagicMock()
+        mock_menu_item = MagicMock()
+        mock_get_pystray.return_value = (mock_icon, mock_menu, mock_menu_item)
+        
+        # プラットフォームをmacOSに設定
+        with patch('desktopassistant.main.IS_MACOS', True), \
+             patch('desktopassistant.main.AppKit') as mock_appkit, \
+             patch('desktopassistant.main.AppHelper') as mock_apphelper:
+            
+            # AppKitモックの設定
+            mock_menu = MagicMock()
+            mock_menu_item = MagicMock()
+            mock_app = MagicMock()
+            
+            mock_appkit.NSMenu.alloc.return_value.init.return_value = mock_menu
+            mock_appkit.NSMenuItem.alloc.return_value.init.return_value = mock_menu_item
+            mock_appkit.NSApplication.sharedApplication.return_value = mock_app
+            
+            from desktopassistant.main import DesktopAssistant
+            app = DesktopAssistant()
+            
+            # メニューが正しく初期化されたことを確認
+            mock_menu.setTitle_.assert_called_with("デスクトップアシスタント")
+            mock_app.setMainMenu_.assert_called_with(mock_menu)
+            
+            # メニュー項目が追加されたことを確認
+            self.assertTrue(mock_menu.insertItem_atIndex_.called)
+            self.assertTrue(mock_menu_item.setSubmenu_.called)
+            
+    @patch('desktopassistant.main.get_pystray')
+    @patch('desktopassistant.main.webview')
+    @patch('threading.current_thread')
+    def test_thread_safety(self, mock_current_thread, mock_webview, mock_get_pystray):
+        """スレッドセーフティのテスト"""
+        # モックの設定
+        mock_icon = MagicMock()
+        mock_menu = MagicMock()
+        mock_menu_item = MagicMock()
+        mock_get_pystray.return_value = (mock_icon, mock_menu, mock_menu_item)
+        
+        mock_window = MagicMock()
+        mock_webview.windows = [mock_window]
+        
+        # メインスレッドの設定
+        main_thread = MagicMock()
+        mock_current_thread.return_value = main_thread
+        
+        # プラットフォームをmacOSに設定
+        with patch('desktopassistant.main.IS_MACOS', True), \
+             patch('desktopassistant.main.AppHelper') as mock_apphelper:
+            
+            from desktopassistant.main import DesktopAssistant
+            app = DesktopAssistant()
+            
+            # メインスレッドでの実行をテスト
+            test_func = MagicMock()
+            main_thread.return_value = True
+            app.execute_on_main_thread(test_func)
+            
+            # メインスレッドでは直接実行されることを確認
+            test_func.assert_called_once()
+            self.assertFalse(mock_apphelper.callAfter.called)
+            
+            # 非メインスレッドでの実行をテスト
+            test_func.reset_mock()
+            main_thread.return_value = False
+            
+            app.execute_on_main_thread(test_func)
+            
+            # AppHelper.callAfterが使用されることを確認
+            mock_apphelper.callAfter.assert_called_once()
+            
+            # システムトレイの初期化が別スレッドで行われることを確認
+            tray_icon = app.setup_tray_icon()
+            self.assertIsNotNone(tray_icon)
+            
+            # WebViewの操作がメインスレッドで実行されることを確認
+            window = mock_webview.windows[0]
+            
+            def show_window():
+                window.show()
+            
+            app.execute_on_main_thread(show_window)
+            window.show.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()
