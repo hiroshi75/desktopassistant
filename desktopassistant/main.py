@@ -9,10 +9,20 @@ import os
 # プラットフォーム判定
 IS_MACOS = sys.platform == 'darwin'
 
-# Lazy import of pystray to improve testability
+# Lazy import of pystray for non-macOS platforms
 def get_pystray():
-    from pystray import Icon, Menu, MenuItem
-    return Icon, Menu, MenuItem
+    """非macOSプラットフォーム用のpystrayをインポート
+    
+    Returns:
+        tuple: (Icon, Menu, MenuItem) if not on macOS, or None if import fails
+    """
+    try:
+        if not IS_MACOS:
+            from pystray import Icon, Menu, MenuItem
+            return Icon, Menu, MenuItem
+    except ImportError:
+        print("Warning: pystray import failed")
+    return None
 
 # HTMLテンプレートの読み込み
 def get_html_template():
@@ -34,18 +44,8 @@ class DesktopAssistant:
     def setup_platform(self):
         """プラットフォーム固有の初期化を行う"""
         if IS_MACOS:
-            try:
-                from .macos_rumps_app import MacOSMenuBarApp
-                self._rumps_app = MacOSMenuBarApp()
-                if self._rumps_app is not None:
-                    self._rumps_app.event_queue = self.event_queue
-                    print("macOS menu bar app initialized successfully")
-                else:
-                    print("Warning: Failed to initialize macOS menu bar app")
-            except Exception as e:
-                print(f"Error initializing macOS menu bar app: {e}")
-                traceback.print_exc()
-                self._rumps_app = None
+            from .macos_rumps_app import MacOSMenuBarApp
+            self._rumps_app = MacOSMenuBarApp()
 
     def create_icon(self):
         """システムトレイアイコンの作成"""
@@ -55,9 +55,17 @@ class DesktopAssistant:
         return image
 
     def setup_tray_icon(self):
-        """システムトレイアイコンのセットアップ"""
-        Icon, Menu, MenuItem = get_pystray()
-        
+        """非macOSプラットフォーム用のシステムトレイアイコンのセットアップ"""
+        if IS_MACOS:
+            return
+            
+        pystray_components = get_pystray()
+        if not pystray_components:
+            print("Warning: pystray not available")
+            return
+            
+        Icon, Menu, MenuItem = pystray_components
+            
         def on_open(icon, item):
             self.event_queue.put("open_chat")
 
@@ -104,27 +112,16 @@ class DesktopAssistant:
                 except Exception as e:
                     print(f"Error running macOS menu bar app: {e}")
                     traceback.print_exc()
-                    # フォールバック: pystrayを使用
-                    print("Falling back to pystray implementation")
-                    self._fallback_to_pystray()
-            else:
-                print("macOS menu bar app not initialized, falling back to pystray")
-                self._fallback_to_pystray()
+                    raise
         else:
-            self._fallback_to_pystray()
-            
-    def _fallback_to_pystray(self):
-        """pystrayを使用したフォールバック実装"""
-        # システムトレイアイコンのスレッド開始
-        tray_thread = threading.Thread(
-            target=self.setup_tray_icon,
-            args=(),
-            daemon=True
-        )
-        tray_thread.start()
-
-        # WebViewの管理（メインループ）
-        self.manage_webview()
+            # 非macOSの場合はpystrayを使用
+            tray_thread = threading.Thread(
+                target=self.setup_tray_icon,
+                args=(),
+                daemon=True
+            )
+            tray_thread.start()
+            self.manage_webview()
 
 if __name__ == "__main__":
     app = DesktopAssistant()

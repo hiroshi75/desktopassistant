@@ -42,32 +42,37 @@ class MacOSMenuBarApp(rumps.App):
         
         # チャットウィンドウの状態管理
         self._window: Optional[webview.Window] = None
-        self._window_ready = threading.Event()
         
     def _ensure_window_exists(self) -> None:
         """チャットウィンドウが存在することを確認
         
         存在しない場合は新しいウィンドウを作成します。
+        すべてのウィンドウ操作はメインスレッドで実行されます。
         """
-        if not self._window:
-            # 既存のウィンドウを探す
-            if webview.windows:
-                self._window = webview.windows[0]
-            else:
-                # 新しいウィンドウを作成
-                self._window = webview.create_window(
-                    title="デスクトップアシスタント",
-                    html=HTML_TEMPLATE,
-                    width=400,
-                    height=600,
-                    resizable=True,
-                    frameless=True,
-                    easy_drag=True,
-                    background_color="#00000000",
-                    transparent=True,
-                    on_top=True
-                )
-                self._window_ready.set()
+        from PyObjCTools import AppHelper
+        
+        def create_window():
+            if not self._window:
+                if webview.windows:
+                    self._window = webview.windows[0]
+                else:
+                    self._window = webview.create_window(
+                        title="デスクトップアシスタント",
+                        html=HTML_TEMPLATE,
+                        width=400,
+                        height=600,
+                        resizable=True,
+                        frameless=True,
+                        easy_drag=True,
+                        background_color="#00000000",
+                        transparent=True,
+                        on_top=True
+                    )
+        
+        if threading.current_thread() is threading.main_thread():
+            create_window()
+        else:
+            AppHelper.callAfter(create_window)
     
     @rumps.clicked("チャットを開く")
     def open_chat(self, _) -> None:
@@ -79,8 +84,10 @@ class MacOSMenuBarApp(rumps.App):
         try:
             self._ensure_window_exists()
             if self._window:
-                self._window.show()
+                from PyObjCTools import AppHelper
+                AppHelper.callAfter(self._window.show)
         except Exception as e:
+            print(f"Error in open_chat: {e}")
             rumps.notification(
                 title="エラー",
                 subtitle="チャットウィンドウを開けませんでした",
@@ -96,12 +103,14 @@ class MacOSMenuBarApp(rumps.App):
         try:
             # チャットウィンドウが存在する場合は閉じる
             if self._window:
-                self._window.hide()
+                from PyObjCTools import AppHelper
+                AppHelper.callAfter(self._window.hide)
                 self._window = None
             
             # アプリケーションを終了
             rumps.quit_application()
         except Exception as e:
+            print(f"Error in quit_app: {e}")
             rumps.notification(
                 title="エラー",
                 subtitle="アプリケーションの終了中にエラーが発生しました",
