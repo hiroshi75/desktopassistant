@@ -1,4 +1,4 @@
-import webview
+import pywebview as webview
 import threading
 import sys
 import traceback

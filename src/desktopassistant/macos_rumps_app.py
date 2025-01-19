@@ -9,7 +9,7 @@ import threading
 from typing import Optional
 
 import rumps
-import webview
+import pywebview as webview
 
 from desktopassistant.main import HTML_TEMPLATE
 
